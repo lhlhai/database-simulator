@@ -13,7 +13,13 @@
 
 Mỗi query được chuyển thành execution events gồm scan/lookup, filter/match, projection, sort, limit và result. Playback controls cho phép chạy từng bước; các row/document tương ứng được highlight, còn item bị loại được đánh dấu trực tiếp.
 
-Bản MVP cũng có **Play mode** cho SQL Sequential Scan và `WHERE`. Người chơi lần lượt xử lý từng row trong source table bằng cách chọn `Send to result` hoặc `Filter out`. Hành động sai không làm mất tiến trình nhưng bị trừ điểm và giải thích nguyên nhân; khi hoàn tất, result table, filtered tray, score và số lỗi được hiển thị.
+Bản MVP cũng có **Play mode** cho SQL Sequential Scan và `WHERE`. Người chơi lần lượt xử lý từng row trong source table bằng cách chọn `Send to result` hoặc `Filter out`. Hành động sai không làm mất tiến trình nhưng bị trừ điểm và giải thích nguyên nhân; khi hoàn tất, result table, filtered tray, score và số lỗi được hiển thị. Nút **Auto play** có thể tự đi qua các quyết định đúng để người dùng quan sát flow.
+
+Bản mở rộng có **Complex SQL mode** dùng AlaSQL client-side cho JOIN, GROUP BY, các hàm `COUNT/SUM/AVG/MIN/MAX`, HAVING, UNION và các query phức tạp mà engine hỗ trợ. Các query phức tạp được biểu diễn bằng pipeline tổng quát `Read tables → Join → Aggregate → Result`; đây là explain model giáo dục, không phải execution plan của một vendor cụ thể.
+
+Ứng dụng cho phép upload tối đa 4 file CSV/TXT/TSV cùng lúc. Dòng đầu tiên phải là header; tên file trở thành tên table, ví dụ `users.csv` và `orders.csv` có thể dùng trong query `FROM users JOIN orders ...`. Giới hạn hiện tại là 2 MB/file, 5.000 rows/table, 32 columns và 512 ký tự/cell. Đây là giới hạn bảo vệ trình duyệt, không phải giới hạn của database production.
+
+**Compare mode** chạy hai query trên cùng dataset trong cùng browser session, hiển thị elapsed time client-side cùng scanned/matched/returned và execution strategy. Elapsed time chỉ dùng để minh họa tương đối; người dùng không nên xem đây là benchmark production.
 
 > Đây là mô hình trực quan hóa cho học tập, không phải benchmark và không tuyên bố tái tạo chính xác optimizer của PostgreSQL, MySQL hay MongoDB production.
 
@@ -41,6 +47,15 @@ SELECT name, city FROM users WHERE city = 'Hanoi' ORDER BY age DESC LIMIT 2;
 ```js
 db.users.find({ age: { $gt: 18 } })
 db.users.find({ active: true }, { name: 1, role: 1, _id: 0 }).limit(3)
+```
+
+Ví dụ complex SQL sau khi upload `users.csv` và `orders.csv`:
+
+```sql
+SELECT u.name, SUM(o.amount) AS total_amount
+FROM users u
+JOIN orders o ON u.id = o.user_id
+GROUP BY u.name;
 ```
 
 Query nằm ngoài subset hỗ trợ sẽ hiển thị diagnostic thân thiện thay vì chạy code tùy ý.
