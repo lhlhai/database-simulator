@@ -13,6 +13,8 @@
 
 Mỗi query được chuyển thành execution events gồm scan/lookup, filter/match, projection, sort, limit và result. Playback controls cho phép chạy từng bước; các row/document tương ứng được highlight, còn item bị loại được đánh dấu trực tiếp.
 
+Bản MVP cũng có **Play mode** cho SQL Sequential Scan và `WHERE`. Người chơi lần lượt xử lý từng row trong source table bằng cách chọn `Send to result` hoặc `Filter out`. Hành động sai không làm mất tiến trình nhưng bị trừ điểm và giải thích nguyên nhân; khi hoàn tất, result table, filtered tray, score và số lỗi được hiển thị.
+
 > Đây là mô hình trực quan hóa cho học tập, không phải benchmark và không tuyên bố tái tạo chính xác optimizer của PostgreSQL, MySQL hay MongoDB production.
 
 ## Chạy local
