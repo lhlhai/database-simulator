@@ -5,7 +5,7 @@ import { runComplexSql } from './complexSql'
 
 export type ComparisonResult = { query: string; plan: QueryPlan; elapsedMs: number }
 
-const isComplex = (query: string) => /\b(join|group\s+by|count\s*\(|sum\s*\(|avg\s*\(|having|union)\b/i.test(query)
+const isComplex = (query: string) => /(\bjoin\b|\bgroup\s+by\b|\b(count|sum|avg|min|max)\s*\(|\bhaving\b|\bunion\b)/i.test(query)
 
 export function runForComparison(query: string, dialect: Dialect, rows: RowData[], tables: UserTable[]): ComparisonResult {
   const started = performance.now()

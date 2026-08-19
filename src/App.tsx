@@ -40,7 +40,7 @@ function App() {
   const run = (nextDialect = dialect, nextQuery = query) => {
     try {
       setError(''); setPlaying(false); setPlayState(createPlayState()); setStep(-1)
-      if (nextDialect === 'sql' && /\b(join|group\s+by|count\s*\(|sum\s*\(|avg\s*\(|having|union)\b/i.test(nextQuery)) {
+      if (nextDialect === 'sql' && /(\bjoin\b|\bgroup\s+by\b|\b(count|sum|avg|min|max)\s*\(|\bhaving\b|\bunion\b)/i.test(nextQuery)) {
         const complex = runComplexSql(nextQuery, tables)
         setPlan(complex.plan)
       } else setPlan(simulate(nextDialect, nextQuery, datasetRows))
