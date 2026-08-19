@@ -27,6 +27,7 @@ function App() {
   const [compareA, setCompareA] = useState('SELECT * FROM users WHERE age > 18;')
   const [compareB, setCompareB] = useState('SELECT name, age FROM users WHERE age > 18;')
   const [comparison, setComparison] = useState<[ComparisonResult, ComparisonResult] | null>(null)
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const datasetRows = tables[0]?.rows ?? users
 
@@ -39,7 +40,7 @@ function App() {
 
   const run = async (nextDialect = dialect, nextQuery = query) => {
     try {
-      setError(''); setPlaying(false); setPlayState(createPlayState()); setStep(-1)
+      setError(''); setPlaying(false); setPlayState(createPlayState()); setStep(-1); setSelectedNode(null)
       if (nextDialect === 'sql' && /(\bjoin\b|\bgroup\s+by\b|\b(count|sum|avg|min|max)\s*\(|\bhaving\b|\bunion\b)/i.test(nextQuery)) {
         const complex = await runDuckDbPlan(nextQuery, tables)
         setPlan(complex)
@@ -102,7 +103,7 @@ function App() {
       <section className="control-grid">
         <div className="panel editor-panel"><div className="panel-heading"><div><span className="section-kicker">01 / QUERY INPUT</span><h2>Tell the database what to do</h2></div><span className="dialect-chip">{dialect === 'sql' ? 'SQL' : 'MONGODB-LIKE'}</span></div>
           <div className="query-input-wrap"><textarea aria-label="Query editor" value={query} onChange={(e) => setQuery(e.target.value)} spellCheck={false} /><CopyButton text={query} label="Copy query" /></div>
-          <div className="editor-footer"><span><CircleHelp size={14} /> MVP syntax · safe parser only</span><button className="run-button" onClick={() => run()}><Zap size={15} /> Run simulation <ChevronRight size={15} /></button></div>
+          <div className="editor-footer"><span><CircleHelp size={14} /> Query Studio · safe parser + physical EXPLAIN</span><div className="editor-actions"><button className="tool-button" onClick={() => setQuery(query.trim().replace(/\s+/g, ' '))}>Format</button><button className="tool-button" onClick={() => { setViewMode('watch'); setStep(-1); setSelectedNode(plan.nodes[0]?.id ?? null) }}>Explain</button><button className="run-button" onClick={() => run()}><Zap size={15} /> Run & animate <ChevronRight size={15} /></button></div></div>
           {error && <div className="error-box">{error}</div>}
         </div>
         <div className="panel presets-panel"><div className="panel-heading"><div><span className="section-kicker">LESSONS</span><h2>Start with a pattern</h2></div></div><div className="preset-list">{presets.filter((item) => item.dialect === dialect).map((item) => <button key={item.id} className={`preset ${query === item.query ? 'selected' : ''}`} onClick={() => choosePreset(item.id)}><span className="preset-dot" /><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={15} /></button>)}</div></div>
@@ -111,6 +112,7 @@ function App() {
       <section className="panel simulation-panel"><div className="panel-heading simulation-heading"><div><span className="section-kicker">02 / EXECUTION TIMELINE</span><h2>{viewMode === 'play' ? 'Play the query' : 'Follow the data'}</h2></div><div className="view-switch"><button className={viewMode === 'watch' ? 'selected' : ''} onClick={() => setViewMode('watch')}>Watch</button><button className={viewMode === 'play' ? 'selected' : ''} disabled={!isPlaySupported(plan)} onClick={() => { setViewMode('play'); setPlaying(false); setPlayState(createPlayState()) }}>Play mode</button>{viewMode === 'watch' && <div className="playback"><button aria-label="Reset" onClick={() => { setPlaying(false); setStep(-1) }}><RotateCcw size={15} /></button><button className="play-main" aria-label={playing ? 'Pause animation' : isDone ? 'Replay animation' : 'Play animation'} onClick={() => { if (isDone) setStep(-1); setPlaying((value) => !value) }}>{playing ? <Pause size={16} /> : isDone ? <RotateCcw size={16} /> : <Play size={16} fill="currentColor" />}</button><button aria-label="Step forward" onClick={() => { setPlaying(false); advance() }}><SkipForward size={15} /></button><label>Speed <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}><option value={0.5}>0.5×</option><option value={1}>1×</option><option value={1.5}>1.5×</option></select></label></div>}</div></div>
           <div className="timeline">{plan.nodes.map((node, index) => <div className={`timeline-node ${current?.node === node.id ? 'current' : ''} ${index <= plan.events.findIndex((event) => event.node === node.id) && step >= 0 ? 'visited' : ''}`} key={node.id}><div className={`node-circle ${node.tone}`}>{String(index + 1).padStart(2, '0')}</div><span>{node.label}</span>{index < plan.nodes.length - 1 && <div className="connector" />}</div>)}</div>
           <div className="event-strip"><div className="event-label"><span className="event-pulse" />{step < 0 ? 'Ready to simulate' : current.title}</div><div className="event-detail">{step < 0 ? 'Bấm play để tiến qua từng bước xử lý.' : current.detail}</div><div className="step-count">{step < 0 ? '0' : step + 1} <span>/ {plan.events.length}</span></div></div>
+          <PlanInspector plan={plan} selectedNode={selectedNode} onSelect={setSelectedNode} />
           {viewMode === 'play' && isPlaySupported(plan) ? <PlayBoard state={playState} rows={datasetRows} plan={plan} onAction={playAction} onReset={() => setPlayState(createPlayState())} /> : <div className="data-view"><div className="data-caption"><span>{dialect === 'sql' ? `${tables[0]?.name ?? 'users'} table` : `${tables[0]?.name ?? 'users'} collection`}</span><span>{current ? `highlighting ${current.activeIds.length} items` : 'waiting for execution'}</span></div><div className="row-grid">{visibleRows.map((row, index) => <div key={String(row.id)} className={`data-card ${row.__state ?? ''} ${current?.rejectedIds?.includes(String(row.id ?? index)) ? 'rejected' : ''}`} style={{ '--delay': `${index * 45}ms`, '--speed': `${1 / speed}s` } as CSSProperties}><div className="card-top"><span className="row-id">{dialect === 'sql' ? 'ROW' : 'DOC'} {String(row.id).padStart(3, '0')}</span><span className="row-dot" /></div><strong>{String(row.name)}</strong><div className="card-fields"><span>age <b>{String(row.age)}</b></span><span>{String(row.city)}</span></div>{current?.rejectedIds?.includes(String(row.id ?? index)) && <div className="rejected-label">filtered out</div>}</div>)}</div></div>}
       </section>
 
@@ -118,6 +120,14 @@ function App() {
       <footer><span>Database Simulator · built for learning, not benchmarking</span><span>Press <kbd>Step</kbd> to slow down the invisible.</span></footer>
     </main>
   </div>
+}
+
+function PlanInspector({ plan, selectedNode, onSelect }: { plan: QueryPlan; selectedNode: string | null; onSelect: (node: string) => void }) {
+  const activeId = selectedNode ?? plan.nodes[0]?.id
+  const activeNode = plan.nodes.find((node) => node.id === activeId) ?? plan.nodes[0]
+  const activeEvent = plan.events.find((event) => event.node === activeNode?.id)
+  const activeIndex = activeNode ? plan.nodes.findIndex((node) => node.id === activeNode.id) : -1
+  return <div className="pro-inspector"><div className="inspector-topline"><div><span className="section-kicker">PHYSICAL PLAN INSPECTOR</span><strong>{plan.physicalPlan ? 'Engine-backed operator tree' : 'Logical execution model'}</strong></div><span className="plan-badge">{plan.nodes.length} operators</span></div><div className="inspector-grid"><div className="operator-tree">{plan.nodes.map((node, index) => { const event = plan.events.find((item) => item.node === node.id); const status = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'pending'; return <button key={node.id} className={`operator-node ${status} ${activeId === node.id ? 'selected' : ''}`} onClick={() => onSelect(node.id)}><span className={`operator-dot ${node.tone}`}>{String(index + 1).padStart(2, '0')}</span><span><strong>{node.label}</strong><small>{node.caption}</small></span><em>{status}</em></button> })}</div><div className="operator-detail"><div className="detail-heading"><span className={`operator-dot ${activeNode?.tone ?? 'blue'}`}>OP</span><div><span>SELECTED OPERATOR</span><strong>{activeNode?.label ?? 'Execution'}</strong></div></div><div className="detail-grid"><span>input rows <b>{activeEvent?.activeIds.length ?? plan.metrics.scanned}</b></span><span>output rows <b>{activeEvent?.passedIds?.length ?? plan.metrics.returned}</b></span><span>rejected <b>{activeEvent?.rejectedIds?.length ?? plan.metrics.rejected}</b></span><span>duration <b>{activeEvent?.duration ?? 0} ms</b></span></div><p>{activeEvent?.detail ?? plan.explanation}</p><div className="data-flow-summary"><span className="flow-relation">{plan.collection}</span><ChevronRight size={13} /><span className="flow-operator">{activeNode?.label ?? 'operator'}</span><ChevronRight size={13} /><span className="flow-relation">result</span></div></div></div>{plan.physicalPlan && <details className="raw-plan"><summary>View raw EXPLAIN physical plan</summary><pre>{plan.physicalPlan}</pre></details>}</div>
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {

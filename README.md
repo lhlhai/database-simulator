@@ -15,6 +15,12 @@ Mỗi query được chuyển thành execution events gồm scan/lookup, filter/
 
 Bản MVP cũng có **Play mode** cho SQL Sequential Scan và `WHERE`, và đây hiện là chế độ mặc định của execution panel. Người chơi kéo nugget/row hiện tại từ **Data Mine** vào **Treasure Chest** hoặc **Filter Pit** bằng pointer/touch drag và native HTML5 drag/drop. Thả đúng sẽ đưa row qua execution flow; thả sai bị engine trừ điểm, giải thích nguyên nhân và snap-back về lượt hiện tại. Khi hoàn tất, result chest, filter pit, score và số lỗi được hiển thị. Nút **Auto-miner** có thể tự đi qua các quyết định đúng để người dùng quan sát flow.
 
+## Professional workbench
+
+Database Simulator hiện có lớp **Query Studio + Physical Plan Inspector** lấy cảm hứng từ các SQL visualizer chuyên dụng nhưng dùng DuckDB-Wasm physical plan làm nguồn sự thật cho complex SQL. Query Studio có Format, Explain, Copy, Run & animate và playback controls. Physical Plan Inspector hiển thị operator tree query-specific, trạng thái pending/active/done, input/output/rejected rows, duration, data-flow summary và raw `EXPLAIN` khi engine cung cấp.
+
+Execution Canvas vẫn giữ Gold Mine Play mode cho bài học row-level, còn complex query được giải thích qua operator tree thật. Người dùng có thể chọn từng operator để xem chi tiết thay vì chỉ nhìn một pipeline text chung. Compare mode giữ hai plan/canvas độc lập và có Auto play both.
+
 Bản mở rộng có **Complex SQL mode** chạy qua DuckDB-Wasm trong browser. Với query complex, app gọi `EXPLAIN` để lấy physical operator tree thật rồi dựng Play mode từ plan đó, thay vì tự đoán thứ tự. Người dùng có thể xem raw plan để hiểu `HASH_JOIN`, join condition, child order, scan, filter, aggregate, sort, projection và limit. Nút `Auto play` chạy theo operator tree; Compare mode có `Auto play both` để chạy hai physical plan đồng thời. Đây là plan của DuckDB, không phải execution plan của PostgreSQL/MySQL; các chi tiết như build/probe chỉ được hiển thị khi engine thực sự cung cấp, không tự suy luận.
 
 Ứng dụng cho phép upload tối đa 4 file CSV/TXT/TSV cùng lúc. Dòng đầu tiên phải là header; tên file trở thành tên table, ví dụ `users.csv` và `orders.csv` có thể dùng trong query `FROM users JOIN orders ...`. Giới hạn hiện tại là 2 MB/file, 5.000 rows/table, 32 columns và 512 ký tự/cell. Đây là giới hạn bảo vệ trình duyệt, không phải giới hạn của database production.
