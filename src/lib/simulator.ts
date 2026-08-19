@@ -32,12 +32,31 @@ function parseSql(query: string) {
 }
 
 function parseNoSql(query: string) {
-  const match = query.match(/find\s*\(\s*(\{[\s\S]*?\})(?:\s*,\s*(\{[\s\S]*?\}))?\s*\)/i)
-  if (!match) throw new Error('NoSQL MVP cần có dạng db.users.find({ ... })')
+  const start = query.search(/find\s*\(/i)
+  if (start < 0) throw new Error('NoSQL MVP cần có dạng db.users.find({ ... })')
+  const firstBrace = query.indexOf('{', start)
+  const readObject = (from: number) => {
+    let depth = 0
+    let quote = false
+    for (let i = from; i < query.length; i += 1) {
+      const char = query[i]
+      if (char === '"' && query[i - 1] !== '\\') quote = !quote
+      if (!quote && char === '{') depth += 1
+      if (!quote && char === '}') { depth -= 1; if (depth === 0) return { text: query.slice(from, i + 1), end: i + 1 } }
+    }
+    return null
+  }
+  const filterObject = readObject(firstBrace)
+  if (!filterObject) throw new Error('Filter NoSQL không đóng object đúng cách')
+  const normalize = (text: string) => text.replace(/([,{]\s*)(\$?[A-Za-z_]\w*)\s*:/g, '$1"$2":').replace(/'/g, '"')
   let filter: Record<string, unknown>
   let projection: Record<string, number> | null = null
-  try { filter = JSON.parse(match[1].replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"')) } catch { throw new Error('Filter NoSQL cần là object đơn giản, ví dụ { age: { $gt: 18 } }') }
-  if (match[2]) { try { projection = JSON.parse(match[2].replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"')) } catch { throw new Error('Projection NoSQL không hợp lệ') } }
+  try { filter = JSON.parse(normalize(filterObject.text)) } catch { throw new Error('Filter NoSQL cần là object đơn giản, ví dụ { age: { $gt: 18 } }') }
+  const secondBrace = query.indexOf('{', filterObject.end)
+  if (secondBrace >= 0 && secondBrace < query.indexOf(')', filterObject.end)) {
+    const projectionObject = readObject(secondBrace)
+    if (projectionObject) { try { projection = JSON.parse(normalize(projectionObject.text)) } catch { throw new Error('Projection NoSQL không hợp lệ') } }
+  }
   const sortMatch = query.match(/\.sort\s*\(\s*\{\s*(\w+)\s*:\s*(-?1)\s*\}\s*\)/i)
   const limitMatch = query.match(/\.limit\s*\(\s*(\d+)\s*\)/i)
   return { filter, projection, sort: sortMatch ? { field: sortMatch[1], direction: Number(sortMatch[2]) < 0 ? 'desc' : 'asc' } : null, limit: limitMatch ? Number(limitMatch[1]) : null }
@@ -45,12 +64,13 @@ function parseNoSql(query: string) {
 
 function compare(actual: unknown, op: string, expectedRaw: string | number) {
   const expected = typeof expectedRaw === 'number' ? expectedRaw : Number.isNaN(Number(expectedRaw)) ? expectedRaw : Number(expectedRaw)
-  if (op === '=') return actual === expected || String(actual) === String(expected)
-  if (op === '!=') return actual !== expected && String(actual) !== String(expected)
-  if (op === '>') return Number(actual) > Number(expected)
-  if (op === '<') return Number(actual) < Number(expected)
-  if (op === '>=') return Number(actual) >= Number(expected)
-  if (op === '<=') return Number(actual) <= Number(expected)
+  const normalized = ({ eq: '=', ne: '!=', gt: '>', lt: '<', gte: '>=', lte: '<=' } as Record<string, string>)[op] ?? op
+  if (normalized === '=') return actual === expected || String(actual) === String(expected)
+  if (normalized === '!=') return actual !== expected && String(actual) !== String(expected)
+  if (normalized === '>') return Number(actual) > Number(expected)
+  if (normalized === '<') return Number(actual) < Number(expected)
+  if (normalized === '>=') return Number(actual) >= Number(expected)
+  if (normalized === '<=') return Number(actual) <= Number(expected)
   return false
 }
 
