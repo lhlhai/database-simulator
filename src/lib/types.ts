@@ -26,10 +26,17 @@ export type QueryPlan = {
   physicalPlan?: string
 }
 
+export type LessonMode = 'row-play' | 'pipeline-play' | 'watch'
+export type LessonCategory = 'foundations' | 'filtering' | 'shaping' | 'joins' | 'analytics' | 'nosql'
+
 export type Preset = {
   id: string
   dialect: Dialect
   label: string
   query: string
   description: string
+  category?: LessonCategory
+  difficulty?: 'beginner' | 'intermediate' | 'advanced'
+  mode?: LessonMode
+  goal?: string
 }

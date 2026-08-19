@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Play, Pause, RotateCcw, SkipForward, Database, ChevronRight, CircleHelp, Zap, Copy, Check, Pickaxe, Gem, Trophy, ArrowDown, ShieldCheck, X } from 'lucide-react'
-import { presets, users } from './data/datasets'
+import { builtInTables, presets, users } from './data/datasets'
 import { simulate } from './lib/simulator'
 import type { Dialect, QueryPlan, RowData } from './lib/types'
 import { createPlayState, expectedAction, isPlaySupported, isRowPlaySupported, takePlayAction, type PlayAction, type PlayState } from './lib/playMode'
@@ -21,9 +21,10 @@ function App() {
   const [playing, setPlaying] = useState(false)
   const [viewMode, setViewMode] = useState<'watch' | 'play'>('play')
   const [playState, setPlayState] = useState<PlayState>(() => createPlayState())
-  const [tables, setTables] = useState<UserTable[]>([{ name: 'users', rows: users, columns: Object.keys(users[0]), source: 'built-in sample' }])
-  const [datasetMessage, setDatasetMessage] = useState('Using built-in users table')
+  const [tables, setTables] = useState<UserTable[]>(builtInTables)
+  const [datasetMessage, setDatasetMessage] = useState('Using built-in users, orders and products tables')
   const [compareOpen, setCompareOpen] = useState(false)
+  const [lessonCategory, setLessonCategory] = useState<'all' | 'foundations' | 'filtering' | 'shaping' | 'joins' | 'analytics' | 'nosql'>('all')
   const [compareA, setCompareA] = useState('SELECT * FROM users WHERE age > 18;')
   const [compareB, setCompareB] = useState('SELECT name, age FROM users WHERE age > 18;')
   const [comparison, setComparison] = useState<[ComparisonResult, ComparisonResult] | null>(null)
@@ -62,11 +63,11 @@ function App() {
   }
   const chooseDialect = (next: Dialect) => {
     const nextPreset = presets.find((item) => item.dialect === next)!
-    setDialect(next); setQuery(nextPreset.query); run(next, nextPreset.query)
+    setDialect(next); setLessonCategory('all'); setQuery(nextPreset.query); setViewMode(nextPreset.mode === 'watch' ? 'watch' : 'play'); run(next, nextPreset.query)
   }
   const choosePreset = (id: string) => {
     const preset = presets.find((item) => item.id === id)!
-    setDialect(preset.dialect); setQuery(preset.query); run(preset.dialect, preset.query)
+    setDialect(preset.dialect); setQuery(preset.query); setViewMode(preset.mode === 'watch' ? 'watch' : 'play'); run(preset.dialect, preset.query)
   }
   const advance = () => setStep((value) => value >= plan.events.length - 1 ? 0 : value + 1)
   const playAction = (action: PlayAction) => setPlayState((state) => takePlayAction(plan, state, datasetRows, action))
@@ -106,7 +107,7 @@ function App() {
           <div className="editor-footer"><span><CircleHelp size={14} /> Query Studio · safe parser + physical EXPLAIN</span><div className="editor-actions"><button className="tool-button" onClick={() => setQuery(query.trim().replace(/\s+/g, ' '))}>Format</button><button className="tool-button" onClick={() => { setViewMode('watch'); setStep(-1); setSelectedNode(plan.nodes[0]?.id ?? null) }}>Explain</button><button className="run-button" onClick={() => run()}><Zap size={15} /> Run & animate <ChevronRight size={15} /></button></div></div>
           {error && <div className="error-box">{error}</div>}
         </div>
-        <div className="panel presets-panel"><div className="panel-heading"><div><span className="section-kicker">LESSONS</span><h2>Start with a pattern</h2></div></div><div className="preset-list">{presets.filter((item) => item.dialect === dialect).map((item) => <button key={item.id} className={`preset ${query === item.query ? 'selected' : ''}`} onClick={() => choosePreset(item.id)}><span className="preset-dot" /><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={15} /></button>)}</div></div>
+        <div className="panel presets-panel"><div className="panel-heading"><div><span className="section-kicker">LESSONS · {presets.filter((item) => item.dialect === dialect).length} paths</span><h2>Choose your next mission</h2></div></div><div className="lesson-categories">{[['all','All'],['foundations','Foundations'],['filtering','Filtering'],['shaping','Shaping'],['joins','Joins'],['analytics','Analytics'],['nosql','NoSQL']].map(([value, label]) => <button key={value} className={lessonCategory === value ? 'active' : ''} onClick={() => setLessonCategory(value as typeof lessonCategory)}>{label}</button>)}</div><div className="preset-list">{presets.filter((item) => item.dialect === dialect && (lessonCategory === 'all' || item.category === lessonCategory)).map((item) => <button key={item.id} className={`preset ${query === item.query ? 'selected' : ''}`} onClick={() => choosePreset(item.id)}><span className="preset-dot" /><span><strong>{item.label}</strong><small>{item.description}</small><em className={`lesson-meta ${item.difficulty ?? 'beginner'}`}>{item.difficulty ?? 'beginner'} · {item.mode === 'row-play' ? 'Gold Mine' : item.mode === 'pipeline-play' ? 'Pipeline Play' : 'Watch'}</em></span><ChevronRight size={15} /></button>)}</div></div>
       </section>
 
       <section className="panel simulation-panel"><div className="panel-heading simulation-heading"><div><span className="section-kicker">02 / EXECUTION TIMELINE</span><h2>{viewMode === 'play' ? 'Play the query' : 'Follow the data'}</h2></div><div className="view-switch"><button className={viewMode === 'watch' ? 'selected' : ''} onClick={() => setViewMode('watch')}>Watch</button><button className={viewMode === 'play' ? 'selected' : ''} disabled={!isPlaySupported(plan)} onClick={() => { setViewMode('play'); setPlaying(false); setPlayState(createPlayState()) }}>Play mode</button>{viewMode === 'watch' && <div className="playback"><button aria-label="Reset" onClick={() => { setPlaying(false); setStep(-1) }}><RotateCcw size={15} /></button><button className="play-main" aria-label={playing ? 'Pause animation' : isDone ? 'Replay animation' : 'Play animation'} onClick={() => { if (isDone) setStep(-1); setPlaying((value) => !value) }}>{playing ? <Pause size={16} /> : isDone ? <RotateCcw size={16} /> : <Play size={16} fill="currentColor" />}</button><button aria-label="Step forward" onClick={() => { setPlaying(false); advance() }}><SkipForward size={15} /></button><label>Speed <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}><option value={0.5}>0.5×</option><option value={1}>1×</option><option value={1.5}>1.5×</option></select></label></div>}</div></div>
@@ -208,7 +209,7 @@ function MinePlayBoard({ state, rows, plan, onAction, onReset, autoEnabled = fal
 
 function PlayBoard({ state, rows, plan, onAction, onReset, autoEnabled = false }: { state: PlayState; rows: RowData[]; plan: QueryPlan; onAction: (action: PlayAction) => void; onReset: () => void; autoEnabled?: boolean }) {
   const rowPlay = isRowPlaySupported(plan)
-  if (!rowPlay) return <StagePlayBoard plan={plan} autoEnabled={autoEnabled} />
+  if (plan.physicalPlan || !rowPlay) return <StagePlayBoard plan={plan} autoEnabled={autoEnabled} />
   return <MinePlayBoard state={state} rows={rows} plan={plan} onAction={onAction} onReset={onReset} autoEnabled={autoEnabled} />
 }
 

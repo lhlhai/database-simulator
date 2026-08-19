@@ -21,6 +21,12 @@ Database Simulator hiện có lớp **Query Studio + Physical Plan Inspector** l
 
 Execution Canvas vẫn giữ Gold Mine Play mode cho bài học row-level, còn complex query được giải thích qua operator tree thật. Người dùng có thể chọn từng operator để xem chi tiết thay vì chỉ nhìn một pipeline text chung. Compare mode giữ hai plan/canvas độc lập và có Auto play both.
 
+## Lesson curriculum
+
+Khu vực Lessons hiện được tổ chức theo lộ trình và category thay vì một danh sách preset phẳng. Các nhóm gồm Foundations, Filtering, Shaping, Joins, Analytics và NoSQL. Mỗi card hiển thị difficulty và mode đề xuất: **Gold Mine** cho row-level scan/filter, **Pipeline Play** cho operator tree và complex query, hoặc Watch khi bài học cần quan sát plan trước.
+
+Bộ bài học mẫu bao phủ full scan, predicate đơn, AND predicates, projection, sort/limit, index-assisted lookup, INNER JOIN, LEFT JOIN, aggregate theo nhóm, filter pushdown, collection scan, MongoDB match, `$and`, projection và sort/limit document. Dataset mặc định có sẵn `users`, `orders` và `products`, nên các bài JOIN/aggregate chạy ngay trước khi upload dữ liệu riêng.
+
 Bản mở rộng có **Complex SQL mode** chạy qua DuckDB-Wasm trong browser. Với query complex, app gọi `EXPLAIN` để lấy physical operator tree thật rồi dựng Play mode từ plan đó, thay vì tự đoán thứ tự. Người dùng có thể xem raw plan để hiểu `HASH_JOIN`, join condition, child order, scan, filter, aggregate, sort, projection và limit. Nút `Auto play` chạy theo operator tree; Compare mode có `Auto play both` để chạy hai physical plan đồng thời. Đây là plan của DuckDB, không phải execution plan của PostgreSQL/MySQL; các chi tiết như build/probe chỉ được hiển thị khi engine thực sự cung cấp, không tự suy luận.
 
 Ứng dụng cho phép upload tối đa 4 file CSV/TXT/TSV cùng lúc. Dòng đầu tiên phải là header; tên file trở thành tên table, ví dụ `users.csv` và `orders.csv` có thể dùng trong query `FROM users JOIN orders ...`. Giới hạn hiện tại là 2 MB/file, 5.000 rows/table, 32 columns và 512 ký tự/cell. Đây là giới hạn bảo vệ trình duyệt, không phải giới hạn của database production.
