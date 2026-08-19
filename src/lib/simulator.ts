@@ -15,7 +15,7 @@ function nodesFor(dialect: Dialect, hasFilter: boolean, hasProject: boolean, has
 }
 
 function event(kind: EventKind, node: string, title: string, detail: string, activeIds: string[], extra: Partial<SimEvent> = {}): SimEvent {
-  return { id: `${kind}-${activeIds.join('-')}-${Math.random()}`, kind, node, title, detail, activeIds, duration: 700, ...extra }
+  return { id: `${kind}-${node}-${activeIds.join('-')}`, kind, node, title, detail, activeIds, duration: 700, ...extra }
 }
 
 function parseSql(query: string) {
