@@ -23,6 +23,7 @@ export type QueryPlan = {
   result: RowData[]
   metrics: { scanned: number; matched: number; returned: number; rejected: number; strategy: string }
   explanation: string
+  physicalPlan?: string
 }
 
 export type Preset = {

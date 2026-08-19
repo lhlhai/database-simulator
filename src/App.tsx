@@ -5,8 +5,8 @@ import { simulate } from './lib/simulator'
 import type { Dialect, QueryPlan, RowData } from './lib/types'
 import { createPlayState, expectedAction, isPlaySupported, isRowPlaySupported, takePlayAction, type PlayAction, type PlayState } from './lib/playMode'
 import { DATASET_LIMITS, parseDatasetFiles, type UserTable } from './lib/dataset'
-import { runComplexSql } from './lib/complexSql'
-import { runForComparison, type ComparisonResult } from './lib/compare'
+import { runForComparisonAsync, type ComparisonResult } from './lib/compare'
+import { runDuckDbPlan } from './lib/duckdbPlanner'
 import './styles.css'
 
 const initial = presets[0]
@@ -37,17 +37,17 @@ function App() {
     return datasetRows.map((row, index) => ({ ...row, __state: active.includes(String(row.id ?? index)) ? 'active' : 'muted' }))
   }, [current, datasetRows])
 
-  const run = (nextDialect = dialect, nextQuery = query) => {
+  const run = async (nextDialect = dialect, nextQuery = query) => {
     try {
       setError(''); setPlaying(false); setPlayState(createPlayState()); setStep(-1)
       if (nextDialect === 'sql' && /(\bjoin\b|\bgroup\s+by\b|\b(count|sum|avg|min|max)\s*\(|\bhaving\b|\bunion\b)/i.test(nextQuery)) {
-        const complex = runComplexSql(nextQuery, tables)
-        setPlan(complex.plan)
+        const complex = await runDuckDbPlan(nextQuery, tables)
+        setPlan(complex)
       } else setPlan(simulate(nextDialect, nextQuery, datasetRows))
     } catch (e) { setError(e instanceof Error ? e.message : 'Không thể mô phỏng query này.') }
   }
-  const compareQueries = () => {
-    try { setError(''); setComparison([runForComparison(compareA, dialect, datasetRows, tables), runForComparison(compareB, dialect, datasetRows, tables)]) }
+  const compareQueries = async () => {
+    try { setError(''); setComparison(await Promise.all([runForComparisonAsync(compareA, dialect, datasetRows, tables), runForComparisonAsync(compareB, dialect, datasetRows, tables)]) as [ComparisonResult, ComparisonResult]) }
     catch (e) { setError(e instanceof Error ? e.message : 'Không thể chạy comparison.') }
   }
   const handleUpload = async (files: FileList | null) => {
@@ -127,7 +127,7 @@ function StagePlayBoard({ plan, autoEnabled = false }: { plan: QueryPlan; autoEn
   const done = stage >= plan.events.length - 1
   useEffect(() => { if (!autoPlaying || done) return; const timer = window.setInterval(() => setStage((value) => value >= plan.events.length - 1 ? value : value + 1), 900); return () => window.clearInterval(timer) }, [autoPlaying, done, plan.events.length])
   const current = stage >= 0 ? plan.events[stage] : undefined
-  return <div className="stage-play-board"><div className="stage-play-copy"><span className="game-badge"><Zap size={13} /> PIPELINE PLAY</span><h3>Walk through the execution stages</h3><p>Query này có nhiều operator. Mỗi bước là một stage thật trong execution model: scan, filter, join, aggregate, sort, projection, limit hoặc result.</p></div><div className="stage-track">{plan.events.map((item, index) => <div className={`stage-step ${index === stage ? 'current' : ''} ${index < stage ? 'visited' : ''}`} key={item.id}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div></div>)}</div><div className="stage-controls"><button className="auto-game" onClick={() => setAutoPlaying((value) => !value)}>{autoPlaying ? <Pause size={13} /> : <Play size={13} fill="currentColor" />} {autoPlaying ? 'Pause auto' : 'Auto play'}</button><button className="reset-game" onClick={() => { setAutoPlaying(false); setStage(-1) }}><RotateCcw size={13} /> Reset stages</button><button className="stage-next" onClick={() => setStage((value) => value >= plan.events.length - 1 ? 0 : value + 1)}>{done ? 'Replay' : 'Next stage'} <SkipForward size={13} /></button></div>{current && <div className="stage-feedback"><span>ACTIVE STAGE</span><strong>{current.title}</strong><p>{current.detail}</p></div>}{done && <div className="complete-banner"><span>Pipeline complete</span><strong>{plan.result.length} rows returned</strong><button onClick={() => { setAutoPlaying(false); setStage(-1) }}>Play again</button></div>}</div>
+  return <div className="stage-play-board"><div className="stage-play-copy"><span className="game-badge"><Zap size={13} /> PIPELINE PLAY</span><h3>Walk through the execution stages</h3><p>Query này có nhiều operator. Mỗi bước là một stage thật trong execution model: scan, filter, join, aggregate, sort, projection, limit hoặc result.</p></div><div className="stage-track">{plan.events.map((item, index) => <div className={`stage-step ${index === stage ? 'current' : ''} ${index < stage ? 'visited' : ''}`} key={item.id}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div></div>)}</div><div className="stage-controls"><button className="auto-game" onClick={() => setAutoPlaying((value) => !value)}>{autoPlaying ? <Pause size={13} /> : <Play size={13} fill="currentColor" />} {autoPlaying ? 'Pause auto' : 'Auto play'}</button><button className="reset-game" onClick={() => { setAutoPlaying(false); setStage(-1) }}><RotateCcw size={13} /> Reset stages</button><button className="stage-next" onClick={() => setStage((value) => value >= plan.events.length - 1 ? 0 : value + 1)}>{done ? 'Replay' : 'Next stage'} <SkipForward size={13} /></button></div>{current && <div className="stage-feedback"><span>ACTIVE STAGE</span><strong>{current.title}</strong><p>{current.detail}</p></div>}{plan.physicalPlan && <details className="physical-plan"><summary>Show raw DuckDB physical plan</summary><pre>{plan.physicalPlan}</pre></details>}{done && <div className="complete-banner"><span>Pipeline complete</span><strong>{plan.result.length} rows returned</strong><button onClick={() => { setAutoPlaying(false); setStage(-1) }}>Play again</button></div>}</div>
 }
 
 function ComparePanel({ dialect, rows, queryA, queryB, setQueryA, setQueryB, comparison, onRun }: { dialect: Dialect; rows: RowData[]; queryA: string; queryB: string; setQueryA: (value: string) => void; setQueryB: (value: string) => void; comparison: [ComparisonResult, ComparisonResult] | null; onRun: () => void }) {

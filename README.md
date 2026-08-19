@@ -15,7 +15,7 @@ Mỗi query được chuyển thành execution events gồm scan/lookup, filter/
 
 Bản MVP cũng có **Play mode** cho SQL Sequential Scan và `WHERE`, và đây hiện là chế độ mặc định của execution panel. Người chơi lần lượt xử lý từng row trong source table bằng cách chọn `Send to result` hoặc `Filter out`. Hành động sai không làm mất tiến trình nhưng bị trừ điểm và giải thích nguyên nhân; khi hoàn tất, result table, filtered tray, score và số lỗi được hiển thị. Nút **Auto play** có thể tự đi qua các quyết định đúng để người dùng quan sát flow.
 
-Bản mở rộng có **Complex SQL mode** dùng AlaSQL client-side cho JOIN, GROUP BY, các hàm `COUNT/SUM/AVG/MIN/MAX`, HAVING, UNION và các query phức tạp mà engine hỗ trợ. Các query phức tạp hiện cũng vào được **Pipeline Play**: người dùng đi qua từng stage `Read tables → Filter → Join → Aggregate → Sort → Projection → Limit → Result` tùy operator mà query thực sự chứa. Nút `Auto play` chạy tuần tự các stage; Compare mode có `Auto play both` để chạy hai pipeline đồng thời. Đây là explain model giáo dục, không phải execution plan của một vendor cụ thể.
+Bản mở rộng có **Complex SQL mode** chạy qua DuckDB-Wasm trong browser. Với query complex, app gọi `EXPLAIN` để lấy physical operator tree thật rồi dựng Play mode từ plan đó, thay vì tự đoán thứ tự. Người dùng có thể xem raw plan để hiểu `HASH_JOIN`, join condition, child order, scan, filter, aggregate, sort, projection và limit. Nút `Auto play` chạy theo operator tree; Compare mode có `Auto play both` để chạy hai physical plan đồng thời. Đây là plan của DuckDB, không phải execution plan của PostgreSQL/MySQL; các chi tiết như build/probe chỉ được hiển thị khi engine thực sự cung cấp, không tự suy luận.
 
 Ứng dụng cho phép upload tối đa 4 file CSV/TXT/TSV cùng lúc. Dòng đầu tiên phải là header; tên file trở thành tên table, ví dụ `users.csv` và `orders.csv` có thể dùng trong query `FROM users JOIN orders ...`. Giới hạn hiện tại là 2 MB/file, 5.000 rows/table, 32 columns và 512 ký tự/cell. Đây là giới hạn bảo vệ trình duyệt, không phải giới hạn của database production.
 
@@ -58,7 +58,7 @@ JOIN orders o ON u.id = o.user_id
 GROUP BY u.name;
 ```
 
-Query nằm ngoài subset hỗ trợ sẽ hiển thị diagnostic thân thiện thay vì chạy code tùy ý.
+Query được đưa trực tiếp vào DuckDB-Wasm nên độ bao phủ SQL rộng hơn adapter giáo dục cũ; nếu DuckDB không parse/execute được, app hiển thị diagnostic cụ thể thay vì chạy code tùy ý. DuckDB-Wasm làm bundle lớn hơn đáng kể, vì vậy complex planner nên được lazy-load ở milestone tối ưu tiếp theo nếu cần giảm thời gian tải ban đầu.
 
 ## Kiến trúc
 
