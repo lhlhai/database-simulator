@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Play, Pause, RotateCcw, SkipForward, Database, ChevronRight, CircleHelp, Zap } from 'lucide-react'
 import { presets, users } from './data/datasets'
 import { simulate } from './lib/simulator'
@@ -14,6 +14,7 @@ function App() {
   const [step, setStep] = useState(-1)
   const [error, setError] = useState('')
   const [speed, setSpeed] = useState(1)
+  const [playing, setPlaying] = useState(false)
 
   const current = plan.events[Math.max(step, 0)]
   const visibleRows = useMemo<Array<(typeof users)[number] & { __state?: string }>>(() => {
@@ -23,7 +24,7 @@ function App() {
   }, [current])
 
   const run = (nextDialect = dialect, nextQuery = query) => {
-    try { setError(''); setPlan(simulate(nextDialect, nextQuery, users)); setStep(-1) }
+    try { setError(''); setPlaying(false); setPlan(simulate(nextDialect, nextQuery, users)); setStep(-1) }
     catch (e) { setError(e instanceof Error ? e.message : 'Không thể mô phỏng query này.') }
   }
   const chooseDialect = (next: Dialect) => {
@@ -34,8 +35,18 @@ function App() {
     const preset = presets.find((item) => item.id === id)!
     setDialect(preset.dialect); setQuery(preset.query); run(preset.dialect, preset.query)
   }
-  const play = () => setStep((value) => value >= plan.events.length - 1 ? 0 : value + 1)
+  const advance = () => setStep((value) => value >= plan.events.length - 1 ? 0 : value + 1)
   const isDone = step >= plan.events.length - 1
+  useEffect(() => {
+    if (!playing) return
+    const timer = window.setInterval(() => {
+      setStep((value) => {
+        if (value >= plan.events.length - 1) { setPlaying(false); return value }
+        return value + 1
+      })
+    }, 1100 / speed)
+    return () => window.clearInterval(timer)
+  }, [playing, plan.events.length, speed])
 
   return <div className="app-shell">
     <header className="topbar">
@@ -62,7 +73,7 @@ function App() {
         <div className="panel presets-panel"><div className="panel-heading"><div><span className="section-kicker">LESSONS</span><h2>Start with a pattern</h2></div></div><div className="preset-list">{presets.filter((item) => item.dialect === dialect).map((item) => <button key={item.id} className={`preset ${query === item.query ? 'selected' : ''}`} onClick={() => choosePreset(item.id)}><span className="preset-dot" /><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={15} /></button>)}</div></div>
       </section>
 
-      <section className="panel simulation-panel"><div className="panel-heading simulation-heading"><div><span className="section-kicker">02 / EXECUTION TIMELINE</span><h2>Follow the data</h2></div><div className="playback"><button aria-label="Reset" onClick={() => setStep(-1)}><RotateCcw size={15} /></button><button className="play-main" aria-label={isDone ? 'Replay' : 'Play next step'} onClick={play}>{isDone ? <RotateCcw size={16} /> : step >= 0 ? <SkipForward size={16} /> : <Play size={16} fill="currentColor" />}</button><button aria-label="Pause" onClick={() => setStep(step)}><Pause size={15} /></button><label>Speed <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}><option value={0.5}>0.5×</option><option value={1}>1×</option><option value={1.5}>1.5×</option></select></label></div></div>
+      <section className="panel simulation-panel"><div className="panel-heading simulation-heading"><div><span className="section-kicker">02 / EXECUTION TIMELINE</span><h2>Follow the data</h2></div><div className="playback"><button aria-label="Reset" onClick={() => { setPlaying(false); setStep(-1) }}><RotateCcw size={15} /></button><button className="play-main" aria-label={playing ? 'Pause animation' : isDone ? 'Replay animation' : 'Play animation'} onClick={() => { if (isDone) setStep(-1); setPlaying((value) => !value) }}>{playing ? <Pause size={16} /> : isDone ? <RotateCcw size={16} /> : <Play size={16} fill="currentColor" />}</button><button aria-label="Step forward" onClick={() => { setPlaying(false); advance() }}><SkipForward size={15} /></button><label>Speed <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}><option value={0.5}>0.5×</option><option value={1}>1×</option><option value={1.5}>1.5×</option></select></label></div></div>
           <div className="timeline">{plan.nodes.map((node, index) => <div className={`timeline-node ${current?.node === node.id ? 'current' : ''} ${index <= plan.events.findIndex((event) => event.node === node.id) && step >= 0 ? 'visited' : ''}`} key={node.id}><div className={`node-circle ${node.tone}`}>{String(index + 1).padStart(2, '0')}</div><span>{node.label}</span>{index < plan.nodes.length - 1 && <div className="connector" />}</div>)}</div>
           <div className="event-strip"><div className="event-label"><span className="event-pulse" />{step < 0 ? 'Ready to simulate' : current.title}</div><div className="event-detail">{step < 0 ? 'Bấm play để tiến qua từng bước xử lý.' : current.detail}</div><div className="step-count">{step < 0 ? '0' : step + 1} <span>/ {plan.events.length}</span></div></div>
           <div className="data-view"><div className="data-caption"><span>{dialect === 'sql' ? 'users table' : 'users collection'}</span><span>{current ? `highlighting ${current.activeIds.length} items` : 'waiting for execution'}</span></div><div className="row-grid">{visibleRows.map((row, index) => <div key={String(row.id)} className={`data-card ${row.__state ?? ''} ${current?.rejectedIds?.includes(String(row.id ?? index)) ? 'rejected' : ''}`} style={{ '--delay': `${index * 45}ms`, '--speed': `${1 / speed}s` } as CSSProperties}><div className="card-top"><span className="row-id">{dialect === 'sql' ? 'ROW' : 'DOC'} {String(row.id).padStart(3, '0')}</span><span className="row-dot" /></div><strong>{String(row.name)}</strong><div className="card-fields"><span>age <b>{String(row.age)}</b></span><span>{String(row.city)}</span></div>{current?.rejectedIds?.includes(String(row.id ?? index)) && <div className="rejected-label">filtered out</div>}</div>)}</div></div>
