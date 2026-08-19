@@ -13,10 +13,13 @@ export type PlayState = {
   complete: boolean
 }
 
-export function isPlaySupported(plan: QueryPlan) {
-  if (plan.dialect !== 'sql') return false
+export function isRowPlaySupported(plan: QueryPlan) {
   const kinds = plan.events.map((event) => event.kind)
   return kinds.every((kind) => kind === 'scan' || kind === 'filter' || kind === 'result') && kinds.includes('scan') && kinds.includes('result')
+}
+
+export function isPlaySupported(plan: QueryPlan) {
+  return plan.events.length > 0
 }
 
 export function createPlayState(): PlayState {

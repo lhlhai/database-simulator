@@ -3,7 +3,7 @@ import { Play, Pause, RotateCcw, SkipForward, Database, ChevronRight, CircleHelp
 import { presets, users } from './data/datasets'
 import { simulate } from './lib/simulator'
 import type { Dialect, QueryPlan, RowData } from './lib/types'
-import { createPlayState, expectedAction, isPlaySupported, takePlayAction, type PlayAction, type PlayState } from './lib/playMode'
+import { createPlayState, expectedAction, isPlaySupported, isRowPlaySupported, takePlayAction, type PlayAction, type PlayState } from './lib/playMode'
 import { DATASET_LIMITS, parseDatasetFiles, type UserTable } from './lib/dataset'
 import { runComplexSql } from './lib/complexSql'
 import { runForComparison, type ComparisonResult } from './lib/compare'
@@ -120,26 +120,40 @@ function App() {
   </div>
 }
 
+function StagePlayBoard({ plan, autoEnabled = false }: { plan: QueryPlan; autoEnabled?: boolean }) {
+  const [stage, setStage] = useState(-1)
+  const [autoPlaying, setAutoPlaying] = useState(autoEnabled)
+  useEffect(() => setAutoPlaying(autoEnabled), [autoEnabled])
+  const done = stage >= plan.events.length - 1
+  useEffect(() => { if (!autoPlaying || done) return; const timer = window.setInterval(() => setStage((value) => value >= plan.events.length - 1 ? value : value + 1), 900); return () => window.clearInterval(timer) }, [autoPlaying, done, plan.events.length])
+  const current = stage >= 0 ? plan.events[stage] : undefined
+  return <div className="stage-play-board"><div className="stage-play-copy"><span className="game-badge"><Zap size={13} /> PIPELINE PLAY</span><h3>Walk through the execution stages</h3><p>Query này có nhiều operator. Mỗi bước là một stage thật trong execution model: scan, filter, join, aggregate, sort, projection, limit hoặc result.</p></div><div className="stage-track">{plan.events.map((item, index) => <div className={`stage-step ${index === stage ? 'current' : ''} ${index < stage ? 'visited' : ''}`} key={item.id}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{item.title}</strong><small>{item.detail}</small></div></div>)}</div><div className="stage-controls"><button className="auto-game" onClick={() => setAutoPlaying((value) => !value)}>{autoPlaying ? <Pause size={13} /> : <Play size={13} fill="currentColor" />} {autoPlaying ? 'Pause auto' : 'Auto play'}</button><button className="reset-game" onClick={() => { setAutoPlaying(false); setStage(-1) }}><RotateCcw size={13} /> Reset stages</button><button className="stage-next" onClick={() => setStage((value) => value >= plan.events.length - 1 ? 0 : value + 1)}>{done ? 'Replay' : 'Next stage'} <SkipForward size={13} /></button></div>{current && <div className="stage-feedback"><span>ACTIVE STAGE</span><strong>{current.title}</strong><p>{current.detail}</p></div>}{done && <div className="complete-banner"><span>Pipeline complete</span><strong>{plan.result.length} rows returned</strong><button onClick={() => { setAutoPlaying(false); setStage(-1) }}>Play again</button></div>}</div>
+}
+
 function ComparePanel({ dialect, rows, queryA, queryB, setQueryA, setQueryB, comparison, onRun }: { dialect: Dialect; rows: RowData[]; queryA: string; queryB: string; setQueryA: (value: string) => void; setQueryB: (value: string) => void; comparison: [ComparisonResult, ComparisonResult] | null; onRun: () => void }) {
   const [stateA, setStateA] = useState<PlayState>(() => createPlayState())
   const [stateB, setStateB] = useState<PlayState>(() => createPlayState())
-  useEffect(() => { setStateA(createPlayState()); setStateB(createPlayState()) }, [comparison])
-  return <section className="compare-panel panel"><div className="compare-head"><div><span className="section-kicker">04 / DUAL PLAY MODE</span><h2>Play both queries side by side</h2><p>Mỗi query có source table, action station, result table, score và autoplay riêng trên cùng dataset.</p></div><button className="run-button" onClick={onRun}><Zap size={14} /> Run both</button></div><div className="compare-editors"><label><span>QUERY A</span><textarea value={queryA} onChange={(event) => setQueryA(event.target.value)} spellCheck={false} /></label><label><span>QUERY B</span><textarea value={queryB} onChange={(event) => setQueryB(event.target.value)} spellCheck={false} /></label></div>{comparison ? <><div className="dual-play-grid">{comparison.map((item, index) => <div className="dual-play-card" key={index}><div className="dual-play-heading"><span>QUERY {index === 0 ? 'A' : 'B'}</span><strong>{item.plan.metrics.strategy}</strong><b>{item.elapsedMs} ms</b></div>{isPlaySupported(item.plan) ? <PlayBoard state={index === 0 ? stateA : stateB} rows={rows} plan={item.plan} onAction={(action) => index === 0 ? setStateA((state) => takePlayAction(item.plan, state, rows, action)) : setStateB((state) => takePlayAction(item.plan, state, rows, action))} onReset={() => index === 0 ? setStateA(createPlayState()) : setStateB(createPlayState())} /> : <div className="compare-empty">Query này có pipeline phức tạp nên chưa có luật Play mode riêng. Watch/explain metrics vẫn khả dụng.</div>}</div>)}</div><div className="compare-results">{comparison.map((item, index) => <div className="compare-card" key={index}><div className="compare-card-title"><span>QUERY {index === 0 ? 'A' : 'B'}</span><strong>{item.plan.metrics.strategy}</strong><b>{item.elapsedMs} ms</b></div><div className="compare-metrics"><span>scanned <b>{item.plan.metrics.scanned}</b></span><span>matched <b>{item.plan.metrics.matched}</b></span><span>returned <b>{item.plan.metrics.returned}</b></span></div><p>{item.plan.explanation}</p></div>)}</div></> : <div className="compare-empty">Chưa chạy comparison. Chọn hai query trên cùng dataset rồi bấm Run both.</div>}<small className="compare-disclaimer">Dialect: {dialect.toUpperCase()} · tốc độ phụ thuộc kích thước dataset, browser và thời điểm chạy; không phải benchmark production.</small></section>
+  const [bothAuto, setBothAuto] = useState(false)
+  useEffect(() => { setStateA(createPlayState()); setStateB(createPlayState()); setBothAuto(false) }, [comparison])
+  return <section className="compare-panel panel"><div className="compare-head"><div><span className="section-kicker">04 / DUAL PLAY MODE</span><h2>Play both queries side by side</h2><p>Mỗi query có source table, action station, result table, score và autoplay riêng trên cùng dataset.</p></div><div className="compare-head-actions"><button className="run-button" onClick={onRun}><Zap size={14} /> Run both</button>{comparison && <button className="auto-both-button" onClick={() => setBothAuto((value) => !value)}>{bothAuto ? <Pause size={14} /> : <Play size={14} fill="currentColor" />} {bothAuto ? 'Pause both' : 'Auto play both'}</button>}</div></div><div className="compare-editors"><label><span>QUERY A</span><textarea value={queryA} onChange={(event) => setQueryA(event.target.value)} spellCheck={false} /></label><label><span>QUERY B</span><textarea value={queryB} onChange={(event) => setQueryB(event.target.value)} spellCheck={false} /></label></div>{comparison ? <><div className="dual-play-grid">{comparison.map((item, index) => <div className="dual-play-card" key={index}><div className="dual-play-heading"><span>QUERY {index === 0 ? 'A' : 'B'}</span><strong>{item.plan.metrics.strategy}</strong><b>{item.elapsedMs} ms</b></div>{isPlaySupported(item.plan) ? <PlayBoard state={index === 0 ? stateA : stateB} rows={rows} plan={item.plan} onAction={(action) => index === 0 ? setStateA((state) => takePlayAction(item.plan, state, rows, action)) : setStateB((state) => takePlayAction(item.plan, state, rows, action))} onReset={() => index === 0 ? setStateA(createPlayState()) : setStateB(createPlayState())} autoEnabled={bothAuto} /> : <div className="compare-empty">Query này có pipeline phức tạp nên chưa có luật Play mode riêng. Watch/explain metrics vẫn khả dụng.</div>}</div>)}</div><div className="compare-results">{comparison.map((item, index) => <div className="compare-card" key={index}><div className="compare-card-title"><span>QUERY {index === 0 ? 'A' : 'B'}</span><strong>{item.plan.metrics.strategy}</strong><b>{item.elapsedMs} ms</b></div><div className="compare-metrics"><span>scanned <b>{item.plan.metrics.scanned}</b></span><span>matched <b>{item.plan.metrics.matched}</b></span><span>returned <b>{item.plan.metrics.returned}</b></span></div><p>{item.plan.explanation}</p></div>)}</div></> : <div className="compare-empty">Chưa chạy comparison. Chọn hai query trên cùng dataset rồi bấm Run both.</div>}<small className="compare-disclaimer">Dialect: {dialect.toUpperCase()} · tốc độ phụ thuộc kích thước dataset, browser và thời điểm chạy; không phải benchmark production.</small></section>
 }
 
-function PlayBoard({ state, rows, plan, onAction, onReset }: { state: PlayState; rows: RowData[]; plan: QueryPlan; onAction: (action: PlayAction) => void; onReset: () => void }) {
+function PlayBoard({ state, rows, plan, onAction, onReset, autoEnabled = false }: { state: PlayState; rows: RowData[]; plan: QueryPlan; onAction: (action: PlayAction) => void; onReset: () => void; autoEnabled?: boolean }) {
+  const rowPlay = isRowPlaySupported(plan)
   const current = rows[state.cursor]
   const completedRows = rows.filter((row, index) => state.resultIds.includes(String(row.id ?? index)))
   const filteredRows = rows.filter((row, index) => state.filteredIds.includes(String(row.id ?? index)))
-  const [autoPlaying, setAutoPlaying] = useState(false)
+  const [autoPlaying, setAutoPlaying] = useState(autoEnabled)
+  useEffect(() => setAutoPlaying(autoEnabled), [autoEnabled])
   useEffect(() => {
-    if (!autoPlaying || state.complete) return
+    if (!rowPlay || !autoPlaying || state.complete) return
     const timer = window.setInterval(() => {
       const row = rows[state.cursor]
       if (row) onAction(expectedAction(plan, row, state.cursor))
     }, 850)
     return () => window.clearInterval(timer)
-  }, [autoPlaying, state.complete, state.cursor, rows, plan, onAction])
+  }, [rowPlay, autoPlaying, state.complete, state.cursor, rows, plan, onAction])
+  if (!rowPlay) return <StagePlayBoard plan={plan} autoEnabled={autoEnabled} />
   const whereText = plan.query.match(/where\s+(.+?)(?:;|$)/i)?.[1] ?? 'không có WHERE'
   return <div className="play-board">
     <div className="play-intro"><div><span className="game-badge"><Zap size={13} /> MINI-GAME</span><h3>Route every row through the query</h3><p>{plan.metrics.rejected ? <>Đọc từng row rồi quyết định: <code>{whereText}</code> đạt hay bị loại?</> : 'Không có WHERE — mọi row đều phải được đưa vào result table.'}</p></div><div className="score-box"><span>SCORE</span><strong>{state.score}</strong><small>{state.mistakes} mistake{state.mistakes === 1 ? '' : 's'}</small></div></div>
