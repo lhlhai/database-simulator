@@ -22,13 +22,13 @@ const operatorLabel = (operator: string) => operator.replace(/_/g, ' ').toLowerC
 
 function physicalOperators(text: string) {
   const operators = text.match(/(?:SEQ_SCAN|TABLE_SCAN|COLUMN_DATA_SCAN|HASH_JOIN|PIECEWISE_MERGE_JOIN|NESTED_LOOP_JOIN|DELIM_JOIN|CROSS_PRODUCT|PROJECTION|FILTER|ORDER_BY|TOP_N|STREAMING_LIMIT|HASH_GROUP_BY|PERFECT_HASH_GROUP_BY|UNGROUPED_AGGREGATE|WINDOW|UNION|CTE_SCAN|EMPTY_RESULT)/g) ?? []
-  return [...new Set(operators)]
+  return operators
 }
 
 function planFromExplain(query: string, explainText: string, result: RowData[], scanned: number): QueryPlan {
   const operators = physicalOperators(explainText)
   const visible = operators.length ? operators : ['SEQ_SCAN', 'PROJECTION']
-  const nodes = visible.map((operator, index) => ({ id: `physical-${index}`, label: operatorLabel(operator), caption: 'DuckDB physical operator', tone: operator.includes('JOIN') ? 'violet' : operator.includes('SCAN') ? 'blue' : operator.includes('AGGREGATE') || operator.includes('GROUP') ? 'amber' : 'green' }))
+  const nodes = visible.map((operator, index) => ({ id: `physical-${index}`, label: operatorLabel(operator), caption: `DuckDB physical operator ${index + 1}`, tone: operator.includes('JOIN') ? 'violet' : operator.includes('SCAN') ? 'blue' : operator.includes('AGGREGATE') || operator.includes('GROUP') ? 'amber' : 'green' }))
   const events: SimEvent[] = visible.map((operator, index) => {
     const isJoin = operator.includes('JOIN')
     const details = isJoin ? `Physical plan chọn ${operatorLabel(operator)}. Xem join condition và thứ tự hai child trong plan.` : `DuckDB thực thi ${operatorLabel(operator)} theo physical plan.`
