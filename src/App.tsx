@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Play, Pause, RotateCcw, SkipForward, Database, ChevronRight, CircleHelp, Zap, Copy, Check, Pickaxe, Gem, Trophy, ArrowDown, ShieldCheck, X } from 'lucide-react'
+import { Play, Pause, RotateCcw, SkipForward, Database, ChevronRight, CircleHelp, Zap, Copy, Check, Pickaxe, Gem, Trophy, ArrowDown, ShieldCheck, X, Sun, Moon } from 'lucide-react'
 import { builtInTables, presets, users } from './data/datasets'
 import { simulate } from './lib/simulator'
 import type { Dialect, QueryPlan, RowData } from './lib/types'
@@ -12,6 +12,7 @@ import './styles.css'
 const initial = presets[0]
 
 function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('database-simulator-theme') as 'dark' | 'light' | null) ?? 'dark')
   const [dialect, setDialect] = useState<Dialect>(initial.dialect)
   const [query, setQuery] = useState(initial.query)
   const [plan, setPlan] = useState<QueryPlan>(() => simulate(initial.dialect, initial.query, users))
@@ -32,6 +33,7 @@ function App() {
   const [workbenchTab, setWorkbenchTab] = useState<'visualize' | 'schema' | 'messages'>('visualize')
   const fileInput = useRef<HTMLInputElement>(null)
   const datasetRows = tables[0]?.rows ?? users
+  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('database-simulator-theme', theme) }, [theme])
 
   const current = plan.events[Math.max(step, 0)]
   const visibleRows = useMemo<Array<RowData & { __state?: string }>>(() => {
@@ -87,7 +89,7 @@ function App() {
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark"><Database size={18} /></span><span>database<span className="brand-accent">/</span>simulator</span></div>
-      <div className="topbar-note"><span className="live-dot" /> Client-side educational model</div>
+      <div className="topbar-actions"><div className="topbar-note"><span className="live-dot" /> Client-side educational model</div><button className="theme-toggle" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}<span>{theme === 'dark' ? 'Light' : 'Dark'}</span></button></div>
     </header>
     <main className="workspace">
       <section className="hero">

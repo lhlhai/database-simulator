@@ -21,6 +21,10 @@ Database Simulator hiện có lớp **Query Studio + Physical Plan Inspector** l
 
 Execution Canvas vẫn giữ Gold Mine Play mode cho bài học row-level, còn complex query được giải thích qua operator tree thật. Người dùng có thể chọn từng operator để xem chi tiết thay vì chỉ nhìn một pipeline text chung. Compare mode giữ hai plan/canvas độc lập và có Auto play both.
 
+## SQL Visualiser-style workbench
+
+The workbench now follows the interaction model of SQL Visualiser more closely: Query Studio sits above an execution workspace with `Visualize`, `Schema & Data` and `Messages` tabs. Schema & Data exposes the current in-memory tables and inline editable cells; Visualize keeps the operator tree, row flow and Gold Mine/Pipeline Play; Messages exposes query-specific diagnostics and the active execution signature. The visual system is available in both **Dark** and **Light** themes through the topbar switcher, and the selection persists in the browser.
+
 ## Lesson curriculum
 
 Khu vực Lessons hiện được tổ chức theo lộ trình và category thay vì một danh sách preset phẳng. Các nhóm gồm Foundations, Filtering, Shaping, Joins, Analytics và NoSQL. Mỗi card hiển thị difficulty và mode đề xuất: **Gold Mine** cho row-level scan/filter, **Pipeline Play** cho operator tree và complex query, hoặc Watch khi bài học cần quan sát plan trước.
